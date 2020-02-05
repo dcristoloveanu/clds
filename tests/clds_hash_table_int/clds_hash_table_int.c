@@ -1317,4 +1317,95 @@ TEST_FUNCTION(clds_hash_table_set_value_with_the_same_value_succeeds_with_initia
     clds_hazard_pointers_destroy(hazard_pointers);
 }
 
+TEST_FUNCTION(clds_hash_table_set_value_with_the_same_value_then_find_succeeds_with_initial_bucket_size_1024)
+{
+    // arrange
+    CLDS_HAZARD_POINTERS_HANDLE hazard_pointers = clds_hazard_pointers_create();
+    ASSERT_IS_NOT_NULL(hazard_pointers);
+    CLDS_HAZARD_POINTERS_THREAD_HANDLE hazard_pointers_thread = clds_hazard_pointers_register_thread(hazard_pointers);
+    ASSERT_IS_NOT_NULL(hazard_pointers_thread);
+    volatile int64_t sequence_number = 45;
+    CLDS_HASH_TABLE_HANDLE hash_table = clds_hash_table_create(test_compute_hash, test_key_compare, 1024, hazard_pointers, &sequence_number, test_skipped_seq_no_cb, (void*)0x5556);
+    ASSERT_IS_NOT_NULL(hash_table);
+
+    CLDS_HASH_TABLE_INSERT_RESULT result;
+    CLDS_HASH_TABLE_ITEM* item = CLDS_HASH_TABLE_NODE_CREATE(TEST_ITEM, NULL, NULL);
+    TEST_ITEM* test_item = CLDS_HASH_TABLE_GET_VALUE(TEST_ITEM, item);
+    test_item->key = 0;
+    test_item->appendix = 42;
+
+    int64_t insert_seq_no;
+    result = clds_hash_table_insert(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(42), item, &insert_seq_no);
+    ASSERT_ARE_EQUAL(CLDS_HASH_TABLE_INSERT_RESULT, CLDS_HASH_TABLE_INSERT_OK, result);
+
+    CLDS_HASH_TABLE_ITEM* find_item_before = clds_hash_table_find(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(42));
+    ASSERT_IS_NOT_NULL(find_item_before);
+
+    CLDS_HASH_TABLE_ITEM* old_item;
+    CLDS_HASH_TABLE_SET_VALUE_RESULT set_value_result = clds_hash_table_set_value(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(42), find_item_before, &old_item, &insert_seq_no);
+    ASSERT_ARE_EQUAL(CLDS_HASH_TABLE_SET_VALUE_RESULT, CLDS_HASH_TABLE_SET_VALUE_OK, set_value_result);
+
+    // act
+    CLDS_HASH_TABLE_ITEM* find_item_after = clds_hash_table_find(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(42));
+
+    // assert
+    ASSERT_IS_NOT_NULL(find_item_after);
+
+    // cleanup
+    CLDS_HASH_TABLE_NODE_RELEASE(TEST_ITEM, find_item_after);
+    CLDS_HASH_TABLE_NODE_RELEASE(TEST_ITEM, old_item);
+    clds_hash_table_destroy(hash_table);
+    clds_hazard_pointers_destroy(hazard_pointers);
+}
+
+TEST_FUNCTION(clds_hash_table_set_value_with_the_same_value_then_find_other_value_succeeds_with_initial_bucket_size_1024)
+{
+    // arrange
+    CLDS_HAZARD_POINTERS_HANDLE hazard_pointers = clds_hazard_pointers_create();
+    ASSERT_IS_NOT_NULL(hazard_pointers);
+    CLDS_HAZARD_POINTERS_THREAD_HANDLE hazard_pointers_thread = clds_hazard_pointers_register_thread(hazard_pointers);
+    ASSERT_IS_NOT_NULL(hazard_pointers_thread);
+    volatile int64_t sequence_number = 45;
+    CLDS_HASH_TABLE_HANDLE hash_table = clds_hash_table_create(test_compute_hash, test_key_compare, 1024, hazard_pointers, &sequence_number, test_skipped_seq_no_cb, (void*)0x5556);
+    ASSERT_IS_NOT_NULL(hash_table);
+
+    CLDS_HASH_TABLE_INSERT_RESULT result;
+    CLDS_HASH_TABLE_ITEM* item = CLDS_HASH_TABLE_NODE_CREATE(TEST_ITEM, NULL, NULL);
+    TEST_ITEM* test_item = CLDS_HASH_TABLE_GET_VALUE(TEST_ITEM, item);
+    test_item->key = 0;
+    test_item->appendix = 42;
+
+    CLDS_HASH_TABLE_ITEM* item2 = CLDS_HASH_TABLE_NODE_CREATE(TEST_ITEM, NULL, NULL);
+    TEST_ITEM* test_item2 = CLDS_HASH_TABLE_GET_VALUE(TEST_ITEM, item2);
+    test_item2->key = 1;
+    test_item2->appendix = 43;
+
+    int64_t insert_seq_no;
+    result = clds_hash_table_insert(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(1), item, &insert_seq_no);
+    ASSERT_ARE_EQUAL(CLDS_HASH_TABLE_INSERT_RESULT, CLDS_HASH_TABLE_INSERT_OK, result);
+
+    result = clds_hash_table_insert(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(2), item2, &insert_seq_no);
+    ASSERT_ARE_EQUAL(CLDS_HASH_TABLE_INSERT_RESULT, CLDS_HASH_TABLE_INSERT_OK, result);
+
+    CLDS_HASH_TABLE_ITEM* find_item_before = clds_hash_table_find(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(1));
+    ASSERT_IS_NOT_NULL(find_item_before);
+
+    CLDS_HASH_TABLE_ITEM* old_item;
+    CLDS_HASH_TABLE_SET_VALUE_RESULT set_value_result = clds_hash_table_set_value(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(2), item, &old_item, &insert_seq_no);
+    ASSERT_ARE_EQUAL(CLDS_HASH_TABLE_SET_VALUE_RESULT, CLDS_HASH_TABLE_SET_VALUE_OK, set_value_result);
+
+    // act
+    CLDS_HASH_TABLE_ITEM* find_item_after = clds_hash_table_find(hash_table, hazard_pointers_thread, (void*)(INT_PTR)(1));
+
+    // assert
+    ASSERT_IS_NOT_NULL(find_item_after);
+
+    // cleanup
+    CLDS_HASH_TABLE_NODE_RELEASE(TEST_ITEM, find_item_before);
+    CLDS_HASH_TABLE_NODE_RELEASE(TEST_ITEM, find_item_after);
+    CLDS_HASH_TABLE_NODE_RELEASE(TEST_ITEM, old_item);
+    clds_hash_table_destroy(hash_table);
+    clds_hazard_pointers_destroy(hazard_pointers);
+}
+
 END_TEST_SUITE(clds_hash_table_inttests)
